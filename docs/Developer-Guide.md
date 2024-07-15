@@ -42,15 +42,15 @@ This guide is intended to provide developers with an overview of SWIRL and how t
 
 1. Create a new `Search` object at the endpoint `/swirl/search/`
 
-    * This invokes the create method in [swirl/views.py](https://github.com/swirlai/swirl-search/blob/main/swirl/views.py). 
+    * This invokes the create method in [swirl/views.py](https://github.com/Timon0219/search-rag/blob/main/swirl/views.py). 
 
-    * SWIRL responds with the `id` of the newly created Search object. The `view.py` module creates the object, then invokes [swirl/search.py](https://github.com/swirlai/swirl-search/blob/main/swirl/search.py) which manages the federation process from there.
+    * SWIRL responds with the `id` of the newly created Search object. The `view.py` module creates the object, then invokes [swirl/search.py](https://github.com/Timon0219/search-rag/blob/main/swirl/search.py) which manages the federation process from there.
 
-2. The search module [swirl/search.py](https://github.com/swirlai/swirl-search/blob/main/swirl/search.py):
+2. The search module [swirl/search.py](https://github.com/Timon0219/search-rag/blob/main/swirl/search.py):
 
     * Executes pre-query processing, using the specified `Search.pre_query_processors`. 
 
-    * Executes the federation process by creating one [federate_task](https://github.com/swirlai/swirl-search/blob/main/swirl/tasks.py) for each SearchProvider specified.
+    * Executes the federation process by creating one [federate_task](https://github.com/Timon0219/search-rag/blob/main/swirl/tasks.py) for each SearchProvider specified.
 
 3. Waits for all tasks to report success by polling the Search and Result objects in the database, or the configured `settings.SWIRL_TIMEOUT` is reached.
 <br/><br/>
@@ -302,10 +302,10 @@ SWIRL includes two `PostResultProcessors` that can detect and remove duplicates.
 
 | Processor | Description | Notes |
 | ---------- | ---------- | ---------- |
-| DedupeByFieldResultProcessor | Detects duplicates by identical match on a single field, and deletes them | The field is specified in [swirl_server/settings.py](https://github.com/swirlai/swirl-search/blob/main/swirl_server/settings.py) and the default field is `url` |
-| DedupeBySimilarityResultProcessor | Detects duplicates by similarity threshold, and deletes them | The similarity considers the `title` and `body` fields, and the threshold is set in [swirl_server/settings.py](https://github.com/swirlai/swirl-search/blob/main/swirl_server/settings.py) |
+| DedupeByFieldResultProcessor | Detects duplicates by identical match on a single field, and deletes them | The field is specified in [swirl_server/settings.py](https://github.com/Timon0219/search-rag/blob/main/swirl_server/settings.py) and the default field is `url` |
+| DedupeBySimilarityResultProcessor | Detects duplicates by similarity threshold, and deletes them | The similarity considers the `title` and `body` fields, and the threshold is set in [swirl_server/settings.py](https://github.com/Timon0219/search-rag/blob/main/swirl_server/settings.py) |
 
-The `DedupeByFieldResultProcessor` in included in the default `Search.post_result_processors` pipeline. To change this modify the `getSearchPostResultProcessorsDefault` method in [swirl/models.py](https://github.com/swirlai/swirl-search/blob/main/swirl/models.py). 
+The `DedupeByFieldResultProcessor` in included in the default `Search.post_result_processors` pipeline. To change this modify the `getSearchPostResultProcessorsDefault` method in [swirl/models.py](https://github.com/Timon0219/search-rag/blob/main/swirl/models.py). 
 
 ## Manage Search Objects
 
@@ -455,7 +455,7 @@ In SWIRL 2.5, result processing was separated into two passes. The `SearchProvid
 
 The default `Search.result_mixer` is the `RelevancyMixer`.
 
-To change these, modify [swirl/models.py](https://github.com/swirlai/swirl-search/blob/main/swirl/models.py) and change the `Search.getSearchPostResultProcessorsDefault()`. 
+To change these, modify [swirl/models.py](https://github.com/Timon0219/search-rag/blob/main/swirl/models.py) and change the `Search.getSearchPostResultProcessorsDefault()`. 
 
 To change the default mixer, change the default in the `Search.result_mixer`:
 
@@ -465,7 +465,7 @@ result_mixer = models.CharField(max_length=200, default='RelevancyMixer', choice
 
 ## Configure Relevancy Field Weights
 
-To configure the weights for individual SWIRL fields, modify the `RELEVANCY_CONFIG` dictionary in the [swirl_server/settings.py](https://github.com/swirlai/swirl-search/blob/main/swirl_server/settings.py) file.
+To configure the weights for individual SWIRL fields, modify the `RELEVANCY_CONFIG` dictionary in the [swirl_server/settings.py](https://github.com/Timon0219/search-rag/blob/main/swirl_server/settings.py) file.
 
 The defaults are:
 
@@ -477,7 +477,7 @@ The defaults are:
 
 ## Configure Stopwords Language
 
-As of version 1.6, SWIRL is configured to load English stopwords only. To change this, modify `SWIRL_DEFAULT_QUERY_LANGUAGE` in [swirl_settings/settings.py](https://github.com/swirlai/swirl-search/blob/main/swirl_server/settings.py) and change it to another [NLTK stopword language](https://stackoverflow.com/questions/54573853/nltk-available-languages-for-stopwords).
+As of version 1.6, SWIRL is configured to load English stopwords only. To change this, modify `SWIRL_DEFAULT_QUERY_LANGUAGE` in [swirl_settings/settings.py](https://github.com/Timon0219/search-rag/blob/main/swirl_server/settings.py) and change it to another [NLTK stopword language](https://stackoverflow.com/questions/54573853/nltk-available-languages-for-stopwords).
 
 ## Understand the Explain Structure
 
@@ -500,11 +500,11 @@ The structure also includes matching stems (`"stems"`), result and query length 
 ## Develop New Connectors
 
 {: .warning }
-To connect to a new endpoint for an existing Connector - like RequestsGet - create a new SearchProvider instead. The [Google PSE SearchProvider example JSON](https://github.com/swirlai/swirl-search/blob/main/SearchProviders/google_pse.json) shows how to use one connector to make hundreds of SearchProviders!
+To connect to a new endpoint for an existing Connector - like RequestsGet - create a new SearchProvider instead. The [Google PSE SearchProvider example JSON](https://github.com/Timon0219/search-rag/blob/main/SearchProviders/google_pse.json) shows how to use one connector to make hundreds of SearchProviders!
 
 To search against a new API where there is a high quality Python package and/or a unique data transport not already supported - then write a new Connector. 
 
-The base classes are here: [swirl/connectors](https://github.com/swirlai/swirl-search/raw/main/swirl/connectors/). 
+The base classes are here: [swirl/connectors](https://github.com/Timon0219/search-rag/raw/main/swirl/connectors/). 
 
 Each Connector is responsible for a workflow defined in the base class `federate()` method:
 
@@ -568,7 +568,7 @@ The following table explains each stage executed by each Connector:
 | process_results | Calls the specified processor to transform the JSON results into the SWIRL result format |  |
 | save_results | Stores the normalized results in the Django database | |
 
-A connector is expected to override `execute_search` and `normalize_response`, at minimum. For more information, review the [Connector base class](https://github.com/swirlai/swirl-search/blob/main/swirl/connectors/connector.py).
+A connector is expected to override `execute_search` and `normalize_response`, at minimum. For more information, review the [Connector base class](https://github.com/Timon0219/search-rag/blob/main/swirl/connectors/connector.py).
 
 The `"eval_credentials": "",` option can be used to set a credential variable in the session and then utilize it in the SearchProvider configuration.  For example, if you set `session['my-connector-token']`, SWIRL will take that variable and replace it with the `{credentials}` string in the SearchProvider.
 
@@ -581,8 +581,8 @@ The `"eval_credentials": "",` option can be used to set a credential variable in
 ```
 
 NOTES:
-* Import new connectors in [`swirl/connectors/__init__.py`](https://github.com/swirlai/swirl-search/blob/main/swirl/connectors/__init__.py)
-* Add new processors to the appropriate CHOICES section of [swirl/models.py](https://github.com/swirlai/swirl-search/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration) 
+* Import new connectors in [`swirl/connectors/__init__.py`](https://github.com/Timon0219/search-rag/blob/main/swirl/connectors/__init__.py)
+* Add new processors to the appropriate CHOICES section of [swirl/models.py](https://github.com/Timon0219/search-rag/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration) 
 * Connectors should only import the objects required for a single connection - for example requests, Elastic or SQLite3
 * To implement a variation on an existing transport, derive a class from it, then override just the `normalize_response` method.
 * Make sure the new `execute_query` method:
@@ -593,7 +593,7 @@ NOTES:
 
 ## Develop New Processors
 
-Processors objects are defined in [swirl/processors](https://github.com/swirlai/swirl-search/raw/main/swirl/processors/). They are designed to be executed in sequence. Each should perform one set of transformations and no more. 
+Processors objects are defined in [swirl/processors](https://github.com/Timon0219/search-rag/raw/main/swirl/processors/). They are designed to be executed in sequence. Each should perform one set of transformations and no more. 
 
 To create a new processor, derive it from `Query`, `Result` or `PostResultProcessor`. Override the `process()` method for simple changes, or derive new ones by adding variables to `__init__`. Be sure to `validate()` them. Processors MUST return either the processed data or, for `PostResultProcessors`, an integer indicating how many results were updated. 
 
@@ -611,15 +611,15 @@ The following table describes the classes available:
 | DateFinderResultProcessor | Looks for a date in the `body` field of each result item. Should it find one, and the `date_published` for that item is `'unknown'`, it replaces `date_published` with the date extracted from the body, and notes this in the `result.messages`. |
 
 NOTES:
-* Import new processors in [`swirl/processors/__init__.py`](https://github.com/swirlai/swirl-search/tree/main/swirl/processors/__init__.py)
-* Add new processors to the appropriate `CHOICES` part of [swirl/models.py](https://github.com/swirlai/swirl-search/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration) 
+* Import new processors in [`swirl/processors/__init__.py`](https://github.com/Timon0219/search-rag/tree/main/swirl/processors/__init__.py)
+* Add new processors to the appropriate `CHOICES` part of [swirl/models.py](https://github.com/Timon0219/search-rag/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration) 
 * Only `PostResultProcessors` should access model data
 * Make sure the `process()` method returns data or a count of the number of results updated
-* Helper functions to create Result dictionaries and highlight text are located in [swirl/processors/utils.py](https://github.com/swirlai/swirl-search/tree/main/swirl/processors/utils.py)
+* Helper functions to create Result dictionaries and highlight text are located in [swirl/processors/utils.py](https://github.com/Timon0219/search-rag/tree/main/swirl/processors/utils.py)
 
 ## Develop New Mixers
 
-Mixers are located in [swirl/mixers](https://github.com/swirlai/swirl-search/raw/main/swirl/mixers/). They implement the following workflow:
+Mixers are located in [swirl/mixers](https://github.com/Timon0219/search-rag/raw/main/swirl/mixers/). They implement the following workflow:
 
 ``` python
     def mix(self):
@@ -664,8 +664,8 @@ The `finalize()` method trims the `self.mixed_results` to the appropriate page, 
 
 Notes:
 
-* Import new mixers in [`swirl/mixers/__init__.py`](https://github.com/swirlai/swirl-search/tree/main/swirl/mixers/__init__.py)
-* Add new mixers to the appropriate `CHOICES` section of [`swirl/models.py`](https://github.com/swirlai/swirl-search/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration)
+* Import new mixers in [`swirl/mixers/__init__.py`](https://github.com/Timon0219/search-rag/tree/main/swirl/mixers/__init__.py)
+* Add new mixers to the appropriate `CHOICES` section of [`swirl/models.py`](https://github.com/Timon0219/search-rag/tree/main/swirl/models.py) - note this will require [database migration](Admin-Guide.md#database-migration)
 
 # Retrieval Augmented Generation Web Socket API
 
