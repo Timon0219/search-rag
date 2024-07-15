@@ -142,7 +142,6 @@ class SearchProvider(models.Model):
 
 def getSearchPreQueryProcessorsDefault():
     return []
-
 def getSearchPostResultProcessorsDefault():
     return ["DedupeByFieldPostResultProcessor","CosineRelevancyPostResultProcessor"]
 
