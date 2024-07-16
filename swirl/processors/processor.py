@@ -7,6 +7,7 @@ from sys import path
 from os import environ
 
 import django
+from django.contrib.auth.models import User, Group
 
 from swirl.utils import swirl_setdir
 path.append(swirl_setdir()) # path to settings.py file
@@ -64,7 +65,8 @@ class Processor:
 
         return None
 
-########################################
+
+ ########################################
 ########################################
 
 class QueryProcessor(Processor):
@@ -115,6 +117,68 @@ class QueryProcessor(Processor):
 
 ########################################
 ########################################
+
+
+class GroupProcessor(Processor):
+
+    type = "GroupProcessor"
+
+    ########################################
+
+    def __init__(self, group_id, request_id=''):
+        super().__init__(request_id)
+        self.group_id = group_id
+        self.group = None
+
+        try:
+            self.group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            self.error(f"Group not found with id {group_id}")
+
+    ########################################
+
+    def __str__(self):
+        return f"{self.type}_{self.group_id}"
+
+    ########################################
+
+    def validate(self):
+        '''
+        Verify the group exists and is valid
+        Returns: boolean
+        '''
+
+        if not self.group:
+            self.error("Group is not valid")
+            return False
+
+        self.status = "VALID"
+        return True
+
+    ########################################
+
+    def process(self):
+        '''
+        Executes the workflow for a group processor
+        Returns: processed group data
+        '''
+
+        # Fetch members of the group
+        members = User.objects.filter(groups__id=self.group_id).values('id', 'username', 'email')
+
+        # Example processing logic
+        processed_data = {
+            'group_id': self.group.id,
+            'group_name': self.group.name,
+            'group_members': list(members)
+        }
+
+        return processed_data
+
+
+########################################
+########################################
+
 
 class ResultProcessor(Processor):
 
