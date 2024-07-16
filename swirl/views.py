@@ -31,8 +31,6 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from swirl.processors.processor import GroupProcessor
-
 import csv
 import base64
 import hashlib
@@ -344,8 +342,8 @@ class SearchViewSet(viewsets.ModelViewSet):
     API endpoint for managing Search objects.
     Use GET to list all, POST to create a new one.
     Add /<id>/ to DELETE, PUT or PATCH one.
-    Add ?q=<query_string> to create a Search with default settings
-    Add ?qs=<query_string> to run a Search and get results directly
+    Add ?q=<query_string> to the URL to create a Search with default settings
+    Add ?qs=<query_string> to the URL to run a Search and get results directly
     Add &providers=<provider1_id>,<provider2_tag> etc to specify SearchProvider(s)
     Add ?rerun=<query_id> to fully re-execute a query, discarding previous results
     Add ?update=<query_id> to update the Search with new results from all sources
@@ -355,16 +353,17 @@ class SearchViewSet(viewsets.ModelViewSet):
     serializer_class = SearchSerializer
     authentication_classes = [SessionAuthentication, BasicAuthentication]
 
+    def get_queryset(self):
+        user_groups = self.request.user.groups.values_list('id', flat=True)
+        return Search.objects.filter(owner=self.request.user, group__in=user_groups)
+
+    def report(self):
+        return self.get_queryset()
+
     def list(self, request):
-        # Check permissions
+        # check permissions
         if not request.user.has_perm('swirl.view_search'):
             return Response(status=status.HTTP_403_FORBIDDEN)
-
-        # Retrieve the groups the user is part of
-        user_groups = request.user.groups.values_list('id', flat=True)
-
-        # Filter the queryset based on the user's groups
-        self.queryset = self.queryset.filter(owner__groups__in=user_groups)
 
         ########################################
 
@@ -390,20 +389,21 @@ class SearchViewSet(viewsets.ModelViewSet):
         if 'q' in request.GET.keys():
             query_string = request.GET['q']
         if query_string:
-            # Check permissions
+            # check permissions
             if not (request.user.has_perm('swirl.add_search') and request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.add_result') and request.user.has_perm('swirl.change_result')):
                 logger.warning(f"User {self.request.user} needs permissions add_search({request.user.has_perm('swirl.add_search')}), change_search({request.user.has_perm('swirl.change_search')}), add_result({request.user.has_perm('swirl.add_result')}), change_result({request.user.has_perm('swirl.change_result')})")
                 return Response(status=status.HTTP_403_FORBIDDEN)
-            # Run search
+            # run search
             logger.debug(f"{module_name}: Search.create() from ?q")
             try:
-                new_search = Search.objects.create(query_string=query_string, searchprovider_list=providers, owner=self.request.user, tags=tags)
+                new_search = Search.objects.create(query_string=query_string,searchprovider_list=providers,owner=self.request.user, tags=tags)
             except Error as err:
                 self.error(f'Search.create() failed: {err}')
             new_search.status = 'NEW_SEARCH'
             new_search.save()
             logger.info(f"{request.user} search_q {new_search.id}")
-            run_search(new_search.id, Authenticator().get_session_data(request), request=request)
+            # search_task.delay(new_search.id, Authenticator().get_session_data(request))
+            run_search(new_search.id, Authenticator().get_session_data(request),request=request)
             return redirect(f'/swirl/results?search_id={new_search.id}')
 
         ########################################
@@ -428,18 +428,21 @@ class SearchViewSet(viewsets.ModelViewSet):
         if 'qs' in request.GET.keys():
             query_string = request.GET['qs']
         if query_string:
-            # Check permissions
+            # check permissions
             if not (request.user.has_perm('swirl.add_search') and request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.add_result') and request.user.has_perm('swirl.change_result')):
                 logger.warning(f"User {self.request.user} needs permissions add_search({request.user.has_perm('swirl.add_search')}), change_search({request.user.has_perm('swirl.change_search')}), add_result({request.user.has_perm('swirl.add_result')}), change_result({request.user.has_perm('swirl.change_result')})")
                 return Response(status=status.HTTP_403_FORBIDDEN)
-            # Run search
+            # run search
             logger.debug(f"{module_name}: Search.create() from ?qs")
             try:
-                new_search = Search.objects.create(query_string=query_string, searchprovider_list=providers, owner=self.request.user, pre_query_processors=pre_query_processor_single_list, tags=tags)
+                # security review for 1.7 - OK, created with owner
+                new_search = Search.objects.create(query_string=query_string,searchprovider_list=providers,owner=self.request.user,
+                                                   pre_query_processors=pre_query_processor_single_list,tags=tags)
             except Error as err:
                 self.error(f'Search.create() failed: {err}')
             new_search.status = 'NEW_SEARCH'
             new_search.save()
+            # log info
             logger.info(f"{request.user} search_qs {new_search.id}")
             res = run_search(new_search.id, Authenticator().get_session_data(request), request=request)
             if not res:
@@ -448,14 +451,17 @@ class SearchViewSet(viewsets.ModelViewSet):
             if not Search.objects.filter(id=new_search.id).exists():
                 logger.info('Search object creation failed!', status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 return Response('Search object creation failed!', status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # security review for 1.7 - OK, search id created
             search = Search.objects.get(id=new_search.id)
             tries = 0
             if search.status.endswith('_READY') or search.status == 'RESCORING':
                 try:
                     if otf_result_mixer:
-                        results = alloc_mixer(otf_result_mixer)(search.id, search.results_requested, 1, explain, provider, request=request).mix()
+                        # call the specifixed mixer on the fly otf
+                        results = alloc_mixer(otf_result_mixer)(search.id, search.results_requested, 1, explain, provider,request=request).mix()
                     else:
-                        results = alloc_mixer(search.result_mixer)(search.id, search.results_requested, 1, explain, provider, request=request).mix()
+                        # call the mixer for this search provider
+                        results = alloc_mixer(search.result_mixer)(search.id, search.results_requested, 1, explain, provider,request=request).mix()
                 except NameError as err:
                     message = f'Error: NameError: {err}'
                     logger.error(f'{module_name}: {message}')
@@ -467,8 +473,8 @@ class SearchViewSet(viewsets.ModelViewSet):
                 return Response(paginate(results, self.request), status=status.HTTP_200_OK)
             else:
                 time.sleep(1)
-            # End if
-        # End if
+            # end if
+        # end if
 
         ########################################
 
@@ -477,14 +483,14 @@ class SearchViewSet(viewsets.ModelViewSet):
             rerun_id = int(request.GET['rerun'])
 
         if rerun_id:
-            # Check permissions
+            # check permissions
             if not (request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.delete_result') and request.user.has_perm('swirl.add_result') and request.user.has_perm('swirl.change_result')):
                 logger.warning(f"User {self.request.user} needs permissions change_search({request.user.has_perm('swirl.change_search')}), delete_result({request.user.has_perm('swirl.delete_result')}), add_result({request.user.has_perm('swirl.add_result')}), change_result({request.user.has_perm('swirl.change_result')})")
                 return Response(status=status.HTTP_403_FORBIDDEN)
-            # Security check
+            # security check
             if not Search.objects.filter(id=rerun_id, owner=self.request.user).exists():
                 return Response('Result Object Not Found', status=status.HTTP_404_NOT_FOUND)
-            # Security review for 1.7 - OK, filtered by search
+            # security review for 1.7 - OK, filtered by search
             logger.debug(f"{module_name}: ?rerun!")
             rerun_search = Search.objects.get(id=rerun_id)
             old_results = Result.objects.filter(search_id=rerun_search.id)
@@ -492,15 +498,16 @@ class SearchViewSet(viewsets.ModelViewSet):
             for old_result in old_results:
                 old_result.delete()
             rerun_search.status = 'NEW_SEARCH'
-            # Fix for https://github.com/swirlai/swirl-search/issues/35
+            # fix for https://github.com/swirlai/swirl-search/issues/35
             message = f"[{datetime.now()}] Rerun requested"
             rerun_search.messages = []
             rerun_search.messages.append(message)
             rerun_search.save()
             logger.info(f"{request.user} rerun {rerun_id}")
+            # search_task.delay(rerun_search.id, Authenticator().get_session_data(request))
             run_search(rerun_search.id, Authenticator().get_session_data(request), request=request)
             return redirect(f'/swirl/results?search_id={rerun_search.id}')
-        # End if
+        # end if
 
         ########################################
 
@@ -509,9 +516,129 @@ class SearchViewSet(viewsets.ModelViewSet):
             update_id = request.GET['update']
 
         if update_id:
-            # Check permissions
+            # check permissions
             if not (request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.change_result')):
-                logger.warning(f"User {self.request.user} needs permissions change_search({request.user.has_perm('swirl.change_search')}), change_result({request.user.has_perm('swirl.change_result')
+                logger.warning(f"User {self.request.user} needs permissions change_search({request.user.has_perm('swirl.change_search')}), change_result({request.user.has_perm('swirl.change_result')})")
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            # security check
+            if not Search.objects.filter(id=update_id, owner=self.request.user).exists():
+                return Response('Result Object Not Found', status=status.HTTP_404_NOT_FOUND)
+            logger.debug(f"{module_name}: ?update!")
+            search.status = 'UPDATE_SEARCH'
+            search.save()
+            logger.info(f"{request.user} update {update_id}")
+            # search_task.delay(update_id, Authenticator().get_session_data(request))
+            # time.sleep(SWIRL_SUBSCRIBE_WAIT)
+            run_search(update_id, Authenticator().get_session_data(request), request=request)
+            return redirect(f'/swirl/results?search_id={update_id}')
+
+        ########################################
+
+        logger.debug(f"{module_name}: Search.list()!")
+
+        # security review for 1.7 - OK, filtered by owner
+        self.queryset = self.get_queryset()
+        serializer = SearchSerializer(self.queryset, many=True)
+        return Response(paginate(serializer.data, self.request), status=status.HTTP_200_OK)
+
+    ########################################
+
+    def create(self, request):
+
+        # check permissions
+        if not (request.user.has_perm('swirl.add_search') and request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.add_result') and request.user.has_perm('swirl.change_result')):
+            logger.warning(f"User {self.request.user} needs permissions add_search({request.user.has_perm('swirl.add_search')}), change_search({request.user.has_perm('swirl.change_search')}), add_result({request.user.has_perm('swirl.add_result')}), change_result({request.user.has_perm('swirl.change_result')})")
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        logger.debug(f"{module_name}: Search.create() from POST")
+
+        serializer = SearchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # security review for 1.7 - OK, create with owner
+        serializer.save(owner=self.request.user)
+
+        if not (self.request.user.has_perm('swirl.view_searchprovider')):
+            # TO DO: SECURITY REVIEW
+            if Search.objects.filter(id=serializer.data['id'], owner=self.request.user).exists():
+                search = Search.objects.get(id=serializer.data['id'])
+                search.status = 'ERR_NO_SEARCHPROVIDERS'
+                search.save()
+        else:
+            # search_task.delay(serializer.data['id'], Authenticator().get_session_data(request))
+            logger.info(f"{request.user} search_post")
+            run_search(serializer.data['id'], Authenticator().get_session_data(request), request=request)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    ########################################
+
+    def retrieve(self, request, pk=None):
+
+        # check permissions
+        if not request.user.has_perm('swirl.view_search'):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        # security check
+        if not Search.objects.filter(pk=pk, owner=self.request.user).exists():
+            return Response('Search Object Not Found', status=status.HTTP_404_NOT_FOUND)
+
+        # security review for 1.7 - OK, filtered by owner
+        self.queryset = Search.objects.get(pk=pk)
+        serializer = SearchSerializer(self.queryset)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    ########################################
+
+    def update(self, request, pk=None):
+
+        # check permissions
+        if not (request.user.has_perm('swirl.change_search')):
+            logger.warning(f"User {self.request.user} needs permissions change_search({request.user.has_perm('swirl.change_search')})")
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        # security review for 1.7 - OK, filtered by owner
+        if not Search.objects.filter(pk=pk, owner=self.request.user).exists():
+            return Response('Search Object Not Found', status=status.HTTP_404_NOT_FOUND)
+
+        logger.debug(f"{module_name}: Search.update()!")
+
+        search = Search.objects.get(pk=pk)
+        search.date_updated = datetime.now()
+        serializer = SearchSerializer(instance=search, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # security review for 1.7 - OK, create with owner
+        serializer.save(owner=self.request.user)
+        # re-start queries if status appropriate
+        if search.status == 'NEW_SEARCH':
+            # check permissions
+            if not (request.user.has_perm('swirl.add_search') and request.user.has_perm('swirl.change_search') and request.user.has_perm('swirl.add_result') and request.user.has_perm('swirl.change_result')):
+                logger.warning(f"User {self.request.user} needs permissions add_search({request.user.has_perm('swirl.add_search')}), change_search({request.user.has_perm('swirl.change_search')}), add_result({request.user.has_perm('swirl.add_result')}), change_result({request.user.has_perm('swirl.change_result')})")
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            # search_task.delay(search.id, Authenticator().get_session_data(request))
+            logger.info(f"{request.user} search_put {search.id}")
+            run_search(search.id, Authenticator().get_session_data(request), request=request)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    ########################################
+
+    def destroy(self, request, pk=None):
+
+        # check permissions
+        if not request.user.has_perm('swirl.delete_search'):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        # security review for 1.7 - OK, filtered by owner
+        if not Search.objects.filter(pk=pk, owner=self.request.user).exists():
+            return Response('Search Object Not Found', status=status.HTTP_404_NOT_FOUND)
+
+        logger.debug(f"{module_name}: Search.destroy()!")
+
+        search = Search.objects.get(pk=pk)
+        search.delete()
+        return Response('Search Object Deleted', status=status.HTTP_410_GONE)
+
+
+                                              
 
 
 ########################################
